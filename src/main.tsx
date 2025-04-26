@@ -7,6 +7,10 @@ import "@fontsource/roboto/700.css";
 import { CssBaseline } from "@mui/material";
 import Routes from "./Routes.tsx";
 
+export const appConfig = {
+  title: "Guia Turístico Web",
+  description: "A simple React + TypeScript + Vite template",
+}
 async function enableMocking() {
   if (!import.meta.env.VITE_ENABLE_MSW) {
     return;

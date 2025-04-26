@@ -2,7 +2,6 @@
 
 import {
   AppBar,
-  Avatar,
   Box,
   Button,
   Card,
@@ -11,20 +10,22 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
-  Menu,
-  MenuItem,
-  TextField,
   Toolbar,
   Tooltip,
   Typography,
 } from "@mui/material";
 import AddLocationAltIcon from "@mui/icons-material/AddLocationAlt";
 import useFetch from "../../hooks/useFetch";
-import { TouristSpot } from "../../types/touristSpots";
+import {
+  CreateTouristSpotData,
+  TouristSpot,
+  UpdateTouristSpotData,
+} from "../../types/touristSpots";
 import { Edit } from "@mui/icons-material";
 import { useCallback, useEffect, useState } from "react";
 import { useTouristSpots } from "../../services/useTouristSpots";
 import { useNavigate } from "react-router";
+import TouristSpotForm from "../../components/form/TouristSpotForm";
 interface User {
   name: string;
   email: string;
@@ -32,12 +33,21 @@ interface User {
   email_verified: boolean;
 }
 
+const DEFAULT_TOURIST_SPOT_INITIAL_VALUES = {
+  name: "",
+  description: "",
+  address: "",
+  latitude: 0,
+  longitude: 0,
+};
+
 export default function DashboardViewPage() {
-  const { data: spots } = useFetch<TouristSpot[]>(
-    "http://localhost:8080/v1/tourist-spots"
-  );
-  const { data: userInfo } = useFetch<User>(
+  const { data: userInfo, error } = useFetch<User>(
     "http://localhost:8080/v1/userInfo"
+  );
+
+  const { data: spots, mutate } = useFetch<TouristSpot[]>(
+    "http://localhost:8080/v1/tourist-spots"
   );
 
   const { create, update } = useTouristSpots();
@@ -53,18 +63,45 @@ export default function DashboardViewPage() {
     if (userInfo) setLoggedUser(userInfo);
   }, [userInfo]);
 
-  const handleCreate = async (data: TouristSpot) => {
+  const handleCreate = async (data: CreateTouristSpotData) => {
     await create(data);
+    setOpenConfirmationModal(false);
+    mutate();
   };
 
-  const handleUpdate = async (id: number, data: TouristSpot) => {
-    await update(id, data);
+  const handleUpdate = async (
+    data: CreateTouristSpotData | UpdateTouristSpotData
+  ) => {
+    if (!(data as UpdateTouristSpotData)?.id) return;
+    await update(data as UpdateTouristSpotData);
+    setOpenEdittingModal(false);
+    mutate();
   };
 
-  // if (error)
-  //   return <Typography>Falhou para carregar os dados da API</Typography>;
+  const [openEdittingModal, setOpenEdittingModal] = useState(false);
+  const [spotId, setSpotId] = useState<number | null>(null);
+  const handleOpenEdittingModal = useCallback(
+    (id: number) => {
+      setSpotId(id);
+      setOpenEdittingModal(true);
+    },
+    [setSpotId]
+  );
 
-    return (
+  const getValuesFromSpotId = useCallback(
+    (id: number) => {
+      const spot = spots?.find((spot) => spot.id === id);
+      if (!spot) return DEFAULT_TOURIST_SPOT_INITIAL_VALUES;
+      return spot;
+    },
+    [spots]
+  );
+
+  if (!userInfo) return <Typography>Carregando...</Typography>;
+  if (error)
+    return <Typography>Falhou para carregar os dados da API</Typography>;
+
+  return (
     <Box>
       <AppBar
         position="static"
@@ -146,38 +183,53 @@ export default function DashboardViewPage() {
             marginLeft: 2,
           }}
         >
-          {spots?.length ? spots.map((spot) => (
-            <Card
-              sx={{
-                mb: 2,
-                p: 4,
-                width: "250px",
-              }}
-            >
-              <Box
+          {spots?.length ? (
+            spots.map((spot) => (
+              <Card
+                key={spot.id}
                 sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
+                  mb: 2,
+                  p: 4,
+                  width: "250px",
                 }}
               >
-                <Typography variant="subtitle2">{spot.name}</Typography>
-                <Tooltip title="Editar Informações sobre esse Ponto Turístico">
-                  <IconButton
-                    size="small"
-                    color="default"
-                    onClick={handleOpenModal}
-                  >
-                    <Edit fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              </Box>
-              <Typography variant="body2" fontStyle="italic" mt={2}>
-                {spot.description}
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <Typography variant="subtitle2">{spot.name}</Typography>
+                  <Tooltip title="Editar Informações sobre esse Ponto Turístico">
+                    <IconButton
+                      size="small"
+                      color="default"
+                      onClick={() => handleOpenEdittingModal(spot.id)}
+                    >
+                      <Edit fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+                <Typography variant="body2" fontStyle="italic" mt={2}>
+                  {spot.description}
+                </Typography>
+                <Typography variant="caption">{spot.address}</Typography>
+              </Card>
+            ))
+          ) : (
+            <Box>
+              <Typography
+                variant="body2"
+                sx={{
+                  textAlign: "center",
+                  width: "100%",
+                }}
+              >
+                Nenhum Guia Turístico foi adicionado
               </Typography>
-              <Typography variant="caption">{spot.address}</Typography>
-            </Card>
-          )) : <Typography>Nenhum Guia Turístico foi adicionado</Typography>}
+            </Box>
+          )}
         </Box>
 
         <Dialog
@@ -186,85 +238,29 @@ export default function DashboardViewPage() {
         >
           <DialogTitle>Informações sobre o Ponto Turístico </DialogTitle>
           <DialogContent>
-            <Box
-              sx={{
-                mb: 1,
-              }}
-            >
-              <TextField
-                id="outlined-basic"
-                label="Nome"
-                variant="outlined"
-                fullWidth
-              />
-            </Box>
-            <Box
-              sx={{
-                mb: 1,
-              }}
-            >
-              <TextField
-                id="outlined-basic"
-                label="Description"
-                variant="outlined"
-                fullWidth
-              />
-            </Box>
-            <Box
-              sx={{
-                mb: 1,
-              }}
-            >
-              <TextField
-                id="outlined-basic"
-                label="Endereço"
-                variant="outlined"
-                fullWidth
-              />
-            </Box>
-            <Box
-              sx={{
-                mb: 1,
-              }}
-            >
-              <TextField
-                id="outlined-basic"
-                label="Latitude"
-                variant="outlined"
-                fullWidth
-              />
-            </Box>
-            <Box
-              sx={{
-                mb: 1,
-              }}
-            >
-              <TextField
-                id="outlined-basic"
-                label="Longitude"
-                variant="outlined"
-                fullWidth
-              />
-            </Box>
-
-            <Box
-              sx={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <Button
-                variant="text"
-                color="primary"
-                onClick={() => setOpenConfirmationModal(false)}
-              >
-                Cancelar
-              </Button>
-              <Button variant="contained">Salvar</Button>
-            </Box>
+            <TouristSpotForm
+              initialValues={DEFAULT_TOURIST_SPOT_INITIAL_VALUES}
+              onSave={handleCreate}
+              onClose={() => setOpenConfirmationModal(false)}
+            />
           </DialogContent>
         </Dialog>
+
+        {spotId && (
+          <Dialog
+            open={openEdittingModal}
+            onClose={() => setOpenEdittingModal(false)}
+          >
+            <DialogTitle>Informações sobre o Ponto Turístico </DialogTitle>
+            <DialogContent>
+              <TouristSpotForm
+                initialValues={getValuesFromSpotId(spotId)}
+                onSave={handleUpdate}
+                onClose={() => setOpenEdittingModal(false)}
+              />
+            </DialogContent>
+          </Dialog>
+        )}
       </Box>
     </Box>
   );
